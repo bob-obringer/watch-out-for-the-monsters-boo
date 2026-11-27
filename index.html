@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Monsters, Boo" />
+    <meta name="theme-color" content="#0d0b1a" />
+    <title>Watch Out for the Monsters, Boo</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Creepster&family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <div id="app"></div>
+
+    <!-- HUD -->
+    <div id="hud">
+      <div id="candy-pill">
+        <span class="candy-icon">🍬</span>
+        <span id="candy-count">0</span>
+        <span id="candy-rate">+0/min</span>
+      </div>
+
+      <button id="goal-card" class="card">
+        <div class="goal-icon" id="goal-icon">🎃</div>
+        <div class="goal-body">
+          <div class="goal-text" id="goal-text">Build a Pumpkin Patch</div>
+          <div class="goal-bar"><div class="goal-fill" id="goal-fill"></div><span id="goal-prog">0/1</span></div>
+        </div>
+        <div class="goal-reward" id="goal-reward">🍬 10</div>
+      </button>
+
+      <div id="top-right">
+        <button id="btn-sound" class="round-btn" aria-label="Sound">🔊</button>
+        <button id="btn-gear" class="round-btn" aria-label="Settings">⚙️</button>
+      </div>
+
+      <button id="btn-power" class="ready" aria-label="Make Boo invisible">
+        <div class="pw-cd" id="pw-cd"></div>
+        <span class="pw-icon">👻</span>
+        <span class="pw-label">Hide!</span>
+      </button>
+
+      <div id="monster-meter" class="hidden">
+        <span>👀</span><span id="monster-count">0</span>
+      </div>
+    </div>
+
+    <!-- Bottom panel -->
+    <div id="panel" class="hidden">
+      <button id="panel-close" class="round-btn small" aria-label="Close">✕</button>
+      <div id="panel-title">Build here!</div>
+      <div id="panel-body"></div>
+    </div>
+
+    <!-- Settings -->
+    <div id="settings" class="hidden">
+      <div class="settings-card">
+        <div class="settings-title">Settings</div>
+        <button id="btn-restart" class="big-btn danger">Start Over</button>
+        <button id="btn-settings-close" class="big-btn">Back</button>
+      </div>
+    </div>
+
+    <div id="banner" class="hidden">Watch out for the monsters, boo!</div>
+    <div id="toast" class="hidden"></div>
+    <div id="float-layer"></div>
+
+    <!-- Title -->
+    <div id="title">
+      <div class="title-inner">
+        <div class="title-ghost">🐈‍⬛</div>
+        <h1>Watch out for the<br /><span>monsters,</span> boo</h1>
+        <button id="btn-play" class="big-btn play">Tap to Play</button>
+        <div class="title-hint">Boo the cat needs your help! Grow candy, light lanterns, and tap monsters to say <b>BOO!</b></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
