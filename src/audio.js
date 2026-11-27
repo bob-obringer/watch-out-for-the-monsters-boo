@@ -267,6 +267,27 @@ export class Sound {
     }
   }
 
+  whirr() {
+    if (!this.ctx) return; const t = this.ctx.currentTime;
+    const o = this.osc('sawtooth', 140); o.frequency.linearRampToValueAtTime(260, t + 0.5);
+    const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 900; bp.Q.value = 2;
+    const g = this.env(0.06, t, 0.05, 0.5); o.connect(bp).connect(g); this.out(g, 0.2); o.start(t); o.stop(t + 0.7);
+  }
+  stomp() {
+    if (!this.ctx) return; const t = this.ctx.currentTime;
+    const o = this.osc('sine', 70); o.frequency.exponentialRampToValueAtTime(30, t + 0.3);
+    const g = this.env(0.45, t, 0.005, 0.35); o.connect(g); this.out(g, 0.3); o.start(t); o.stop(t + 0.45);
+    const n = this.noise(t, 0.12); const hp = this.ctx.createBiquadFilter(); hp.type = 'bandpass'; hp.frequency.value = 2500;
+    const ng = this.env(0.12, t, 0.002, 0.1); n.connect(hp).connect(ng); this.out(ng, 0.2);
+  }
+  yarn() {
+    if (!this.ctx) return; const t = this.ctx.currentTime;
+    const n = this.noise(t, 0.4); const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1;
+    bp.frequency.setValueAtTime(600, t); bp.frequency.exponentialRampToValueAtTime(1800, t + 0.3);
+    const g = this.env(0.2, t, 0.03, 0.3); n.connect(bp).connect(g); this.out(g, 0.3);
+    [784, 988].forEach((f, i) => { const o = this.osc('triangle', f); const og = this.env(0.1, t + 0.15 + i * 0.08, 0.004, 0.2); o.connect(og); this.out(og, 0.4); o.start(t + 0.15 + i * 0.08); o.stop(t + 0.5 + i * 0.08); });
+  }
+
   speak(text, { pitch = 1, rate = 1 } = {}) {
     if (this.muted || !('speechSynthesis' in window)) return;
     try {

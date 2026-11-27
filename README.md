@@ -15,6 +15,9 @@ A spooky-but-cute 3D hex builder. You're **Boo**, a little black cat on an islan
 - 👻 The **Hide!** button makes Boo invisible for a few seconds, so monsters lose track of Boo.
 - 🏰 The Haunted Castle zaps nearby monsters with lightning.
 - 🪦 Tap the **Graveyard** sign in The Dark to open the Spooky Graveyard (🍬 400). Zombies rise from its graves.
+- 👑 Sometimes **the Toy King** (a castle-sized rusty toy robot with a TV face) climbs out of the sea.
+  Its long spring arm grabs monsters and throws them at Boo. Tap it 5 times so Boo ties it up with 🧶 yarn,
+  and you get to play the **claw machine** for candy and a 🤖 **robot buddy** that guards Boo and grabs candy.
 - Tap a building to level it up (up to ★★★). The goal card at the top left gives bonus candy.
 
 Drag to move around, pinch (or scroll) to zoom. The game saves on its own; ⚙️ → Start Over resets.
@@ -36,4 +39,4 @@ Every push to `main` rebuilds and redeploys the site with GitHub Actions.
 - Game rules (costs, candy amounts, lantern size, goals): top of `src/main.js`
 - 3D models (pumpkins, monsters, Boo, house): `src/models.js`
 - Sounds and music (all synthesized): `src/audio.js`
-- Console helpers: `game.addCandy(100)`, `game.spawnMonster()`, `game.giant()`, `game.zombie()`, `game.thunder()`, `game.startWave()`
+- Console helpers: `game.addCandy(100)`, `game.spawnMonster()`, `game.giant()`, `game.zombie()`, `game.thunder()`, `game.toyKing()`, `game.clawGame()`, `game.startWave()`

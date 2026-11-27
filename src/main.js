@@ -6,6 +6,7 @@ import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import * as X from './models.js';
 import { Sound } from './audio.js';
+import { createClawGame } from './claw.js';
 
 const $ = (id) => document.getElementById(id);
 const rand = (a, b) => a + Math.random() * (b - a);
@@ -58,6 +59,8 @@ const GOALS = [
   { icon: '👁️', text: 'Scare a GIANT eyeball', need: 1, val: () => S.stats.giants || 0, reward: 100 },
   { icon: '⚡', text: 'Castle zaps 5 monsters', need: 5, val: () => S.stats.zaps || 0, reward: 120 },
   { icon: '🪦', text: 'Open the Spooky Graveyard', need: 1, val: () => (S.graveyard ? 1 : 0), reward: 200 },
+  { icon: '🧶', text: 'Tie up the Toy King', need: 1, val: () => S.stats.kings || 0, reward: 100 },
+  { icon: '🤖', text: 'Win a Robot Buddy', need: 1, val: () => (S.buddy ? 1 : 0), reward: 100 },
   { icon: '🏝️', text: 'Own 20 tiles', need: 20, val: () => ownedCount(), reward: 100 },
   { icon: '🌟', text: 'Get a Level 3 building', need: 1, val: () => (maxLevel() >= 3 ? 1 : 0), reward: 120 },
   { icon: '👑', text: 'Scare 50 monsters', need: 50, val: () => S.stats.scared, reward: 200 },
@@ -76,6 +79,7 @@ const S = {
   goal: 0,
   stats: { collected: 0, boo: 0, scared: 0, bought: 0, giants: 0, invis: 0, zaps: 0 },
   graveyard: false,
+  buddy: false,
 };
 let started = false;
 const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } })();
@@ -84,6 +88,7 @@ if (saved) {
   S.goal = saved.goal ?? 0;
   Object.assign(S.stats, saved.stats || {});
   S.graveyard = !!saved.graveyard;
+  S.buddy = !!saved.buddy;
 }
 try { sound.muted = localStorage.getItem('wofm-muted') === '1'; } catch { /* ignore */ }
 
@@ -150,7 +155,8 @@ const rt = new THREE.WebGLRenderTarget(innerWidth * DPR, innerHeight * DPR, { ty
 const composer = new EffectComposer(renderer, rt);
 composer.setPixelRatio(DPR);
 composer.setSize(innerWidth, innerHeight);
-composer.addPass(new RenderPass(scene, camera));
+const renderPass = new RenderPass(scene, camera);
+composer.addPass(renderPass);
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.8, 0.5, 0.85);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
@@ -177,6 +183,10 @@ composer.addPass(vignette);
 /* ================================================================== */
 const cam = { target: new THREE.Vector3(0, 0, 0.6), dist: 30, goal: innerWidth < innerHeight ? 24 : 17, min: 7, max: 30 };
 function updateCamera(dt) {
+  if (cam.pan) {
+    cam.target.lerp(cam.pan, 1 - Math.exp(-dt * 1.5));
+    if (cam.target.distanceTo(cam.pan) < 0.05) cam.pan = null;
+  }
   cam.dist += (cam.goal - cam.dist) * (1 - Math.exp(-dt * 8));
   const k = (cam.dist - cam.min) / (cam.max - cam.min);
   const pitch = THREE.MathUtils.lerp(0.72, 1.02, clamp(k, 0, 1));
@@ -203,6 +213,7 @@ function groundAt(x, y) {
 function panBy(a, b) {
   const ga = groundAt(a.x, a.y), gb = groundAt(b.x, b.y);
   if (!ga || !gb) return;
+  cam.pan = null;
   cam.target.add(ga.sub(gb));
   cam.target.y = 0;
   if (cam.target.length() > 10) cam.target.setLength(10);
@@ -214,13 +225,16 @@ const pinchInfo = () => {
   const [a, b] = [...pointers.values()];
   return { d: Math.hypot(a.x - b.x, a.y - b.y), mid: { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 } };
 };
+let clawDrag = false;
 canvas.addEventListener('pointerdown', (e) => {
   canvas.setPointerCapture?.(e.pointerId);
+  if (claw.active) { clawDrag = true; claw.pointer(e.clientX, e.clientY); return; }
   pointers.set(e.pointerId, { x: e.clientX, y: e.clientY, sx: e.clientX, sy: e.clientY, t: performance.now() });
   if (pointers.size === 1) gesture = { type: 'maybeTap' };
   else if (pointers.size === 2) { const p = pinchInfo(); gesture = { type: 'pinch', d0: p.d, dist0: cam.goal, mid: p.mid }; }
 });
 canvas.addEventListener('pointermove', (e) => {
+  if (claw.active) { if (clawDrag) claw.pointer(e.clientX, e.clientY); return; }
   const p = pointers.get(e.pointerId);
   if (!p || !gesture) return;
   const prev = { x: p.x, y: p.y };
@@ -236,6 +250,8 @@ canvas.addEventListener('pointermove', (e) => {
   if (gesture.type === 'pan') panBy(prev, p);
 });
 const endPointer = (e) => {
+  clawDrag = false;
+  if (claw.active) { pointers.delete(e.pointerId); gesture = null; return; }
   const p = pointers.get(e.pointerId);
   pointers.delete(e.pointerId);
   if (!p) return;
@@ -408,6 +424,9 @@ function claimLight(b) {
 }
 const homeLight = new THREE.PointLight(0xffb060, 5, 5, 2);
 scene.add(homeLight);
+// always in the scene (intensity 0) so adding the Toy King doesn't recompile shaders
+const kingLight = new THREE.PointLight(0xa8ffd8, 0, 9, 1.6);
+scene.add(kingLight);
 
 /* ================================================================== */
 /* Buildings                                                          */
@@ -587,6 +606,7 @@ function updateBoo(dt) {
 }
 
 function catchBoo(m) {
+  if (buddy && buddy.guardCD <= 0) { buddyGuard(m); return; }
   const loss = Math.min(S.candy, 5);
   S.candy -= loss;
   candyChanged(true);
@@ -751,6 +771,21 @@ function updateMonsters(dt) {
       // lantern light scares monsters (giants just get annoyed)
       if (litBy(m.pos.x, m.pos.z) && m.size <= 1) { m.fear += dt; if (m.fear > 0.8) scareMonster(m, false); }
       else m.fear = Math.max(0, m.fear - dt);
+    } else if (m.state === 'grabbed') {
+      scared = true; // the Toy King moves it around
+    } else if (m.state === 'thrown') {
+      scared = true;
+      m.vel.y -= 9.8 * dt;
+      m.pos.addScaledVector(m.vel, dt);
+      m.yaw += dt * 10;
+      const gy = groundY(m.pos.x, m.pos.z);
+      if (m.vel.y < 0 && m.pos.y <= gy) {
+        m.pos.y = gy; m.state = 'chase'; m.st = 0; m.chaseT = 0;
+        sound.stomp();
+        floatText('💥', m.pos.clone().add(new THREE.Vector3(0, 0.6, 0)), 'info');
+        if (powerT > 0) loseTrack(m);
+      }
+      g.position.copy(m.pos);
     } else if (m.state === 'scared') {
       scared = true;
       const k = m.st / 0.55;
@@ -792,6 +827,7 @@ function updateMonsters(dt) {
   // Spawning: only once you have something worth munching
   const prodCount = producers().length;
   if (!prodCount) return;
+  if (!king) { kingT -= dt; if (kingT <= 0 && prodCount >= 2) { spawnKing(); kingT = rand(200, 280); } }
   spawnT -= dt;
   const cap = Math.min(10, 3 + Math.floor(prodCount / 2));
   if (spawnT <= 0) {
@@ -834,7 +870,7 @@ const waterNormals = X.makeWaterNormals();
 waterNormals.repeat.set(26, 26);
 const waterTime = { value: 0 };
 const waterMat = new THREE.MeshStandardMaterial({
-  color: 0x081525, roughness: 0.22, metalness: 0.0, normalMap: waterNormals, normalScale: new THREE.Vector2(0.3, 0.3), envMapIntensity: 0.9,
+  color: 0x081525, roughness: 0.38, metalness: 0.0, normalMap: waterNormals, normalScale: new THREE.Vector2(0.2, 0.2), envMapIntensity: 0.15,
 });
 waterMat.onBeforeCompile = (sh) => {
   sh.uniforms.uTime = waterTime;
@@ -1098,6 +1134,246 @@ function updateBolts(dt) {
   }
 }
 
+/* ---------------- The Toy King ---------------- */
+let king = null, kingT = 90;
+function spawnKing() {
+  if (king) return;
+  const model = X.makeToyKing();
+  const a = Math.PI + rand(-0.9, 0.9); // walks out of the far sea, facing the camera so you see its TV face
+  const start = new THREE.Vector3(Math.sin(a) * 13, -3.8, Math.cos(a) * 13);
+  king = {
+    model, pos: start, state: 'rise', st: 0, yarn: 0, actT: 2, held: null, target: null, life: 80,
+    yaw: Math.atan2(-start.x, -start.z), arm: 1.1, aim: new THREE.Vector3(), stepT: 0, clawStarted: false,
+  };
+  model.setArm(1.1, false);
+  model.group.position.copy(start);
+  scene.add(model.group);
+  cam.pan = new THREE.Vector3(start.x * 0.42, 0, start.z * 0.42);
+  showBanner('The Toy King is coming! 📺');
+  sound.wave();
+  setTimeout(() => sound.speak('I am the Toy King!', { pitch: 0.1, rate: 0.7 }), 500);
+  setTimeout(() => toast('Tap the Toy King to tie it up with yarn! 🧶'), 4500);
+}
+function tieKing() {
+  const K = king;
+  if (!K || ['tied', 'leave', 'rise'].includes(K.state)) return;
+  booGoTo(new THREE.Vector3(K.pos.x + 1.0, 0, K.pos.z + 0.9), 'zoom', 1.5);
+  boo.booT = 0.6; boo.spin = Math.PI * 2;
+  K.yarn++;
+  K.model.addYarn(K.yarn - 1);
+  sound.yarn();
+  floatText(`🧶 ${K.yarn}/5`, K.pos.clone().add(new THREE.Vector3(0, 3.7, 0)), 'boo');
+  if (K.held) { K.held.state = 'walk'; K.held = null; }
+  if (K.yarn >= 5) {
+    K.state = 'tied'; K.st = 0;
+    S.stats.kings = (S.stats.kings || 0) + 1;
+    sound.squeal();
+    sound.speak('Nooo! You got me!', { pitch: 0.2, rate: 0.8 });
+    showBanner('You tied up the Toy King! 🧶', true);
+  } else if (['reach', 'retract', 'throw'].includes(K.state)) { K.state = 'idle'; K.actT = 2.5; }
+}
+const KING_WADE_Y = -0.95;
+function updateKing(dt) {
+  const K = king;
+  if (!K) return;
+  const mdl = K.model, g = mdl.group;
+  K.st += dt;
+  let moving = false, mode = 'smile';
+  const R = Math.hypot(K.pos.x, K.pos.z);
+  const inward = new THREE.Vector3(-K.pos.x, 0, -K.pos.z).normalize();
+  const fwd = new THREE.Vector3(Math.sin(K.yaw), 0, Math.cos(K.yaw));
+  const restAim = K.pos.clone().addScaledVector(fwd, 1.2).add(new THREE.Vector3(0, 0.8, 0));
+  let aim = restAim;
+  if (K.state === 'rise') {
+    K.pos.y = Math.min(KING_WADE_Y, K.pos.y + dt * 1.2);
+    if (K.pos.y >= KING_WADE_Y) { K.state = 'walk'; K.st = 0; }
+  } else if (K.state === 'walk') {
+    moving = true;
+    K.pos.addScaledVector(inward, dt * 0.9);
+    K.yaw = lerpAngle(K.yaw, Math.atan2(inward.x, inward.z), dt * 3);
+    if (R < 7.3) { K.state = 'idle'; K.st = 0; K.actT = 1.5; }
+  } else if (K.state === 'idle') {
+    K.actT -= dt; K.life -= dt;
+    K.yaw = lerpAngle(K.yaw, Math.atan2(boo.pos.x - K.pos.x, boo.pos.z - K.pos.z), dt * 2);
+    K.arm += (1.1 - K.arm) * (1 - Math.exp(-dt * 4));
+    if (K.life <= 0) {
+      K.state = 'leave'; K.st = 0;
+      sound.speak('Ha ha ha!', { pitch: 0.1, rate: 0.7 });
+    } else if (K.actT <= 0) {
+      let best = null, bd = 10;
+      for (const m of monsters) {
+        if (!['walk', 'chase'].includes(m.state)) continue;
+        const d = Math.hypot(m.pos.x - K.pos.x, m.pos.z - K.pos.z);
+        if (d < bd) { bd = d; best = m; }
+      }
+      if (best) { K.target = best; K.state = 'reach'; K.st = 0; sound.whirr(); }
+      else { spawnMonster(); K.actT = 4; sound.stomp(); } // calls a monster out of the dark
+    }
+  } else if (K.state === 'reach') {
+    mode = 'grab';
+    const m = K.target;
+    if (!m || !['walk', 'chase'].includes(m.state)) { K.state = 'idle'; K.actT = 1; }
+    else {
+      aim = m.pos.clone().add(new THREE.Vector3(0, m.h * 0.55, 0));
+      const sh = mdl.shoulder.getWorldPosition(new THREE.Vector3());
+      const need = Math.max(1.1, sh.distanceTo(aim) - 0.2);
+      K.arm = Math.min(need, K.arm + dt * 7);
+      if (K.arm >= need - 0.01) {
+        m.state = 'grabbed'; K.held = m; K.state = 'retract'; K.st = 0;
+        sound.growl(1.4);
+        floatText('😱', aim.clone().add(new THREE.Vector3(0, 0.6, 0)), 'info');
+      }
+    }
+  } else if (K.state === 'retract') {
+    mode = 'grab';
+    K.arm = Math.max(1.5, K.arm - dt * 5);
+    aim = K.pos.clone().addScaledVector(fwd, 0.5).add(new THREE.Vector3(0, 4.5, 0));
+    if (K.arm <= 1.5 && K.st > 0.6) { K.state = 'throw'; K.st = 0; }
+  } else if (K.state === 'throw') {
+    mode = 'grab';
+    const dir = new THREE.Vector3(boo.pos.x - K.pos.x, 0, boo.pos.z - K.pos.z).normalize();
+    K.yaw = lerpAngle(K.yaw, Math.atan2(dir.x, dir.z), dt * 6);
+    aim = K.pos.clone().addScaledVector(dir, K.st < 0.35 ? -0.6 : 1.6).add(new THREE.Vector3(0, K.st < 0.35 ? 4.6 : 3.0, 0));
+    if (K.st > 0.5 && K.held) {
+      const m = K.held;
+      const land = boo.pos.clone().add(new THREE.Vector3(rand(-0.8, 0.8), 0, rand(-0.8, 0.8)));
+      const T = 1.3;
+      m.vel = new THREE.Vector3((land.x - m.pos.x) / T, (land.y - m.pos.y + 0.5 * 9.8 * T * T) / T, (land.z - m.pos.z) / T);
+      m.state = 'thrown'; K.held = null;
+      sound.whirr();
+      floatText('Wheee!', m.pos.clone().add(new THREE.Vector3(0, 0.8, 0)), 'info');
+    }
+    if (K.st > 0.9) { K.state = 'idle'; K.actT = 5; }
+  } else if (K.state === 'tied') {
+    mode = 'tied';
+    K.arm += (1.1 - K.arm) * (1 - Math.exp(-dt * 4));
+    if (K.st > 1.8 && !K.clawStarted) { K.clawStarted = true; startClaw(); }
+  } else if (K.state === 'leave') {
+    moving = true;
+    K.pos.addScaledVector(inward, -dt * 1.1);
+    K.yaw = lerpAngle(K.yaw, Math.atan2(-inward.x, -inward.z), dt * 3);
+    if (K.yarn >= 5) mode = 'tied';
+    if (R > 10.5) K.pos.y -= dt * 1.4;
+    if (K.pos.y < -4.5) { scene.remove(g); king = null; kingLight.intensity = 0; return; }
+  }
+  if (K.state !== 'rise' && !(K.state === 'leave' && R > 10.5)) {
+    const gy = groundY(K.pos.x, K.pos.z);
+    const floorY = gy <= -0.29 ? KING_WADE_Y : gy;
+    K.pos.y += (floorY - K.pos.y) * (1 - Math.exp(-dt * 5));
+  }
+  if (moving) { K.stepT -= dt; if (K.stepT <= 0) { K.stepT = 0.7; sound.stomp(); } }
+  g.position.copy(K.pos);
+  g.rotation.y = K.yaw;
+  mdl.shoulder.lookAt(aim);
+  mdl.setArm(K.arm, K.state === 'reach');
+  if (K.held) {
+    const cw = mdl.clawWorld();
+    K.held.pos.copy(cw).sub(new THREE.Vector3(0, K.held.h * 0.6, 0));
+    K.held.model.group.position.copy(K.held.pos);
+  }
+  mdl.animate(clockTime, dt, moving, mode);
+  kingLight.position.copy(K.pos).addScaledVector(fwd, 1.6).add(new THREE.Vector3(0, 3.0, 0));
+  kingLight.intensity = 14 * mdl.screenMat.color.r / 1.7;
+}
+
+/* ---------------- Robot buddy ---------------- */
+let buddy = null;
+function createBuddy() {
+  if (buddy) return;
+  const model = X.makeRobotBuddy();
+  model.group.scale.setScalar(1.3);
+  buddy = { model, pos: boo.pos.clone().add(new THREE.Vector3(0.7, 0.7, 0.3)), mode: 'follow', target: null, guardCD: 0, fetchCD: 2, shieldT: 0 };
+  model.group.position.copy(buddy.pos);
+  scene.add(model.group);
+}
+function buddyGuard(m) {
+  buddy.guardCD = 5; buddy.shieldT = 1;
+  buddy.pos.copy(boo.pos).lerp(m.pos, 0.45).add(new THREE.Vector3(0, 0.4, 0));
+  floatText('🛡️ BONK!', boo.pos.clone().add(new THREE.Vector3(0, 1.6, 0)), 'boo');
+  sound.zap();
+  scareMonster(m, false);
+}
+function updateBuddy(dt) {
+  const B = buddy;
+  if (!B) return;
+  B.guardCD -= dt; B.fetchCD -= dt; B.shieldT = Math.max(0, B.shieldT - dt);
+  if (B.guardCD <= 0) {
+    for (const m of monsters) {
+      if (m.state === 'chase' && Math.hypot(m.pos.x - boo.pos.x, m.pos.z - boo.pos.z) < 1.3) { buddyGuard(m); break; }
+    }
+  }
+  let goal = null;
+  if (B.mode === 'fetch') {
+    const b = B.target;
+    if (!b || !b.pending || !buildings.includes(b)) B.mode = 'follow';
+    else {
+      goal = b.candy.group.getWorldPosition(new THREE.Vector3());
+      if (B.pos.distanceTo(goal) < 0.4) { collect(b); B.mode = 'follow'; B.fetchCD = 3; }
+    }
+  }
+  if (B.mode === 'follow') {
+    const a = clockTime * 0.8;
+    goal = boo.pos.clone().add(new THREE.Vector3(Math.cos(a) * 0.8, 0.8 + Math.sin(clockTime * 2) * 0.08, Math.sin(a) * 0.5 + 0.3));
+    if (B.fetchCD <= 0) {
+      let best = null, bd = 99;
+      for (const b of buildings) {
+        if (!b.pending) continue;
+        const d = Math.hypot(b.tile.x - boo.pos.x, b.tile.z - boo.pos.z);
+        if (d < bd) { bd = d; best = b; }
+      }
+      if (best) { B.mode = 'fetch'; B.target = best; } else B.fetchCD = 1;
+    }
+  }
+  const step = (B.mode === 'fetch' ? 4.5 : 3.2) * dt;
+  const dv = goal.clone().sub(B.pos);
+  if (dv.length() > step) dv.setLength(step + dv.length() * 0.04);
+  B.pos.add(dv);
+  const g = B.model.group;
+  g.position.copy(B.pos);
+  g.rotation.y = Math.atan2(camera.position.x - B.pos.x, camera.position.z - B.pos.z);
+  B.model.shield.material.opacity = B.shieldT * 0.45;
+  B.model.shield.scale.setScalar(1 + (1 - B.shieldT) * 0.5);
+  B.model.animate(clockTime);
+}
+
+/* ---------------- The claw machine mini game ---------------- */
+const claw = createClawGame({
+  sound,
+  environment: scene.environment,
+  onPrize(p) {
+    if (p.kind === 'buddy') {
+      S.buddy = true;
+      createBuddy();
+      sound.claim();
+      showBanner('You won a Robot Buddy! 🤖', true);
+    } else {
+      S.candy += p.value;
+      S.stats.collected += p.value;
+      candyChanged();
+      sound.collect(5);
+      toast(`+${p.value} 🍬`);
+    }
+    save();
+  },
+  onDone() {
+    renderPass.scene = scene;
+    renderPass.camera = camera;
+    document.body.classList.remove('claw-mode');
+    if (king) { king.state = 'leave'; king.st = 0; }
+    save();
+  },
+});
+function startClaw() {
+  closePanel();
+  claw.start({ hasBuddy: S.buddy });
+  renderPass.scene = claw.scene;
+  renderPass.camera = claw.camera;
+  document.body.classList.add('claw-mode');
+  redGoal = 0;
+  vignette.uniforms.uRed.value = 0;
+  sound.claim();
+}
+
 /* ---------------- spooky extras: lightning, creepy noises ---------------- */
 let thunderT = rand(20, 35), creepyT = rand(8, 16), flash = 0;
 const flashes = [];
@@ -1255,9 +1531,10 @@ function toast(msg) {
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.add('hidden'), 1600);
 }
-function showBanner(msg) {
+function showBanner(msg, happy = false) {
   const el = $('banner');
   el.textContent = msg;
+  el.classList.toggle('happy', happy);
   el.classList.add('hidden'); void el.offsetWidth; el.classList.remove('hidden');
   setTimeout(() => el.classList.add('hidden'), 3400);
 }
@@ -1445,7 +1722,9 @@ function handleTap(x, y) {
   const mHits = monsters.filter((m) => ['emerge', 'walk', 'chase'].includes(m.state)).map((m) => m.model.hit);
   hit = ray.intersectObjects(mHits, false)[0];
   if (hit) { booAttack(hit.object.userData.monster); return; }
-  // 3. Boo
+  // 3. the Toy King -> tie it up with yarn
+  if (king && ray.intersectObject(king.model.hit, false)[0]) { tieKing(); return; }
+  // 3b. Boo
   if (ray.intersectObject(booHit, false)[0]) {
     boo.spin = Math.PI * 2; boo.booT = 0.6;
     sound.speak('Meow!', { pitch: 1.9, rate: 1.2 });
@@ -1490,7 +1769,7 @@ function tapTile(t) {
 function save() {
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
-      candy: S.candy, goal: S.goal, stats: S.stats, graveyard: S.graveyard,
+      candy: S.candy, goal: S.goal, stats: S.stats, graveyard: S.graveyard, buddy: S.buddy,
       owned: [...tiles.values()].filter((t) => t.kind === 'owned').map((t) => t.key),
       buildings: buildings.filter((b) => b.type !== 'home').map((b) => ({ k: b.tile.key, type: b.type, level: b.level })),
     }));
@@ -1513,6 +1792,7 @@ function boot() {
     if (t && t.kind === 'owned' && !t.building && TYPES[sb.type]) createBuilding(t, sb.type, clamp(sb.level | 0, 1, 3), false);
   }
   buildAtmosphere();
+  if (S.buddy) createBuddy();
   refreshLabels();
   updateGoal();
 }
@@ -1520,7 +1800,16 @@ function boot() {
 function frame() {
   const dt = clamp(clock.getDelta(), 0.0001, 0.05);
   clockTime += dt;
+  if (claw.active) {
+    claw.update(dt);
+    vignette.uniforms.uTime.value = clockTime;
+    composer.render();
+    requestAnimationFrame(frame);
+    return;
+  }
   if (started) {
+    updateKing(dt);
+    updateBuddy(dt);
     updateMonsters(dt);
     updateBolts(dt);
     updatePower(dt);
@@ -1557,6 +1846,7 @@ addEventListener('resize', () => {
   camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
   composer.setSize(innerWidth, innerHeight);
+  claw.resize();
 });
 
 $('btn-play').onclick = () => {
@@ -1575,4 +1865,4 @@ $('btn-play').onclick = () => {
 });
 
 // handy for tinkering from the console
-window.game = { S, cam, boo, monsters, buildings, thunder: () => { thunderT = 0; }, zombie: () => spawnMonster({ type: 'zombie' }), giant: () => spawnMonster({ type: 'peeper', size: 1.8, hp: 3 }), spawnMonster, startWave: () => startWave(producers().length), addCandy: (n) => addCandy(n) };
+window.game = { get king() { return king; }, S, cam, boo, monsters, buildings, toyKing: () => spawnKing(), clawGame: () => startClaw(), tieKing: () => tieKing(), thunder: () => { thunderT = 0; }, zombie: () => spawnMonster({ type: 'zombie' }), giant: () => spawnMonster({ type: 'peeper', size: 1.8, hp: 3 }), spawnMonster, startWave: () => startWave(producers().length), addCandy: (n) => addCandy(n) };

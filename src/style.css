@@ -284,3 +284,38 @@ body.panel-open #btn-power { bottom: calc(240px + env(safe-area-inset-bottom)); 
   .build-opt .bo-icon { font-size: 36px; }
   .build-opt .bo-desc { display: none; }
 }
+
+/* ---------- Claw machine ---------- */
+body.claw-mode #hud, body.claw-mode #panel { display: none !important; }
+#claw-ui { position: fixed; inset: 0; pointer-events: none; }
+#claw-ui > * { pointer-events: auto; }
+.claw-top {
+  position: absolute; top: calc(14px + env(safe-area-inset-top)); left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 16px; padding: 10px 22px;
+  background: var(--panel); border: 2px solid var(--panel-edge); border-radius: 999px;
+  pointer-events: none !important;
+}
+.claw-title { font-size: 24px; font-weight: 700; }
+#claw-tries { font-size: 24px; letter-spacing: 2px; }
+.claw-hint {
+  position: absolute; left: 50%; bottom: calc(26px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  font-size: 20px; font-weight: 600; padding: 10px 20px; border-radius: 999px; background: rgba(10,6,24,.7);
+  pointer-events: none !important; white-space: nowrap;
+}
+.big-btn.claw-grab {
+  position: absolute; width: auto;
+  right: calc(22px + env(safe-area-inset-right)); bottom: calc(22px + env(safe-area-inset-bottom));
+  font-size: 30px; padding: 26px 34px; border-radius: 28px;
+  background: linear-gradient(180deg, #ff5ccf, #c21f8f); box-shadow: 0 8px 0 #7a0f58, 0 12px 30px rgba(0,0,0,.5);
+}
+.big-btn.claw-done {
+  position: absolute; width: auto; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  font-size: 26px; padding: 20px 36px;
+}
+@media (max-width: 700px) { .claw-hint { bottom: calc(140px + env(safe-area-inset-bottom)); white-space: normal; text-align: center; width: 86vw; } }
+
+#banner.happy {
+  font-family: 'Fredoka', system-ui, sans-serif; font-weight: 700;
+  color: #ffe27a;
+  text-shadow: 0 0 20px rgba(255, 210, 80, .8), 0 4px 0 #6a3a00, 0 8px 30px #000;
+}
