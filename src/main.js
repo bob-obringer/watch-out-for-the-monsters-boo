@@ -82,6 +82,7 @@ const S = {
   buddy: false,
 };
 let started = false;
+let resetting = false; // once Start Over is confirmed, nothing may write the old save back
 const saved = (() => { try { return JSON.parse(localStorage.getItem(SAVE_KEY)); } catch { return null; } })();
 if (saved) {
   S.candy = saved.candy ?? START_CANDY;
@@ -1696,7 +1697,11 @@ $('btn-sound').onclick = () => {
   try { localStorage.setItem('wofm-muted', sound.muted ? '1' : '0'); } catch { /* ignore */ }
   refreshSoundBtn();
 };
-$('btn-gear').onclick = () => { $('settings').classList.remove('hidden'); $('btn-restart').textContent = 'Start Over'; };
+$('btn-gear').onclick = () => {
+  $('settings').classList.remove('hidden');
+  $('btn-restart').textContent = 'Start Over';
+  $('btn-restart').dataset.armed = '0';
+};
 $('btn-settings-close').onclick = () => $('settings').classList.add('hidden');
 $('btn-restart').onclick = (e) => {
   if (e.currentTarget.dataset.armed !== '1') {
@@ -1704,6 +1709,8 @@ $('btn-restart').onclick = (e) => {
     e.currentTarget.textContent = 'Really? Tap again!';
     return;
   }
+  // Reloading hides the page, which normally triggers a save; block that or the old game comes right back.
+  resetting = true;
   try { localStorage.removeItem(SAVE_KEY); } catch { /* ignore */ }
   location.reload();
 };
@@ -1767,6 +1774,7 @@ function tapTile(t) {
 /* Save                                                               */
 /* ================================================================== */
 function save() {
+  if (resetting) return;
   try {
     localStorage.setItem(SAVE_KEY, JSON.stringify({
       candy: S.candy, goal: S.goal, stats: S.stats, graveyard: S.graveyard, buddy: S.buddy,
