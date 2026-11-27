@@ -1,5 +1,7 @@
 # Watch out for the monsters, boo 👻
 
+**Play it:** https://bob-obringer.github.io/watch-out-for-the-monsters-boo/
+
 A spooky-but-cute 3D hex builder. You're **Boo**, a little black cat on an island at night.
 
 - 🎃 **Pumpkin Patch**, 🧪 **Witch Pot** and 🏰 **Haunted Castle** make candy. Tap the floating candy to grab it.
@@ -17,7 +19,7 @@ A spooky-but-cute 3D hex builder. You're **Boo**, a little black cat on an islan
 
 Drag to move around, pinch (or scroll) to zoom. The game saves on its own; ⚙️ → Start Over resets.
 
-## Run it
+## Run it locally
 
 ```bash
 npm install
@@ -26,6 +28,8 @@ npm run dev
 
 Open the "Network" address it prints (e.g. `http://192.168.x.x:5173`) in Safari on the iPad
 (same Wi-Fi). Share → **Add to Home Screen** makes it fullscreen like a real app.
+
+Every push to `main` rebuilds and redeploys the site with GitHub Actions.
 
 ## Tweaking
 
